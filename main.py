@@ -1,7 +1,7 @@
 import zipfile
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-
+from sklearn.model_selection import train_test_split
 
 # TODO: Generate ipython notebook for submission to competition
 # TODO: Write ReadMe file for GitHub
@@ -27,6 +27,14 @@ def load_data(zip_file_path):
         test_identity = pd.read_csv(
             '/kaggle/input/ieee-fraud-detection/test_identity.csv', index_col='TransactionID')
     print("CSV files read in.")
+
+    # Normalize column names (because it turns out the test dataframes use different naming conventions)
+    train_transaction.columns = train_transaction.columns.str.replace('-', '_')
+    train_identity.columns = train_identity.columns.str.replace('-', '_')
+    test_transaction.columns = test_transaction.columns.str.replace('-', '_')
+    test_identity.columns = test_identity.columns.str.replace('-', '_')
+
+    # Merge transaction and identity columns
     train_df = train_transaction.merge(train_identity, how='left', left_index=True, right_index=True)
     test_df = test_transaction.merge(test_identity, how='left', left_index=True, right_index=True)
     print(f"Data loaded and merged. Train shape: {train_df.shape}, Test shape: {test_df.shape}")
@@ -46,6 +54,7 @@ def process_features(df):
         'id_26', 'id_27', 'id_28', 'id_29', 'id_30', 'id_31', 'id_32',
         'id_33', 'id_34', 'id_35', 'id_36', 'id_37', 'id_38'
     ]
+
     encoded_df = one_hot_encode_with_threshold(df, categorical_features, threshold=0.01)
     processed_df = z_scale(encoded_df)
     return processed_df
@@ -90,15 +99,33 @@ def z_scale(df, exclude_column='isFraud'):
     return df_scaled
 
 
+def split_data(df, test_size=0.2, random_state=42):
+    # Separate features (X) and target (y)
+    X = df.drop(columns=['isFraud'])
+    y = df['isFraud']
+
+    # Split the data into training and validation sets
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, stratify=y
+    )
+
+    print(f"Data split completed:")
+    print(f"  Training set: {X_train.shape[0]} samples")
+    print(f"  Validation set: {X_val.shape[0]} samples")
+
+    return X_train, X_val, y_train, y_val
+
+
 def main():
     # Load data
     train_df, test_df = load_data('data/ieee-fraud-detection.zip')
 
     # Process features (one-hot encoding of categorical features, then z-scaling of all features)
     train_df = process_features(train_df)
-    test_df = process_features(test_df)
+    #test_df = process_features(test_df)
 
-    # TODO: Prepare the training and validation sets from the train_df
+    # Prepare the training and validation sets
+    X_train, X_val, y_train, y_val = split_data(train_df)
 
     # TODO: Train and evaluate models
     # Start with logistic regression, XGboost, k-nearest-neighbor
