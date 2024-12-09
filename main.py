@@ -2,30 +2,33 @@ import zipfile
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+from sklearn.impute import SimpleImputer
 
 # TODO: Generate ipython notebook for submission to competition
 # TODO: Write ReadMe file for GitHub
 
-def load_data(zip_file_path):
+def load_data(zip_file_path, n_rows=None):
     try: # for local environment
         with zipfile.ZipFile(zip_file_path, 'r') as z:
             with z.open('train_transaction.csv') as train_transaction:
-                train_transaction = pd.read_csv(train_transaction, index_col='TransactionID')
+                train_transaction = pd.read_csv(train_transaction, index_col='TransactionID', nrows=n_rows)
             with z.open('train_identity.csv') as train_identity:
-                train_identity = pd.read_csv(train_identity, index_col='TransactionID')
+                train_identity = pd.read_csv(train_identity, index_col='TransactionID', nrows=n_rows)
             with z.open('test_transaction.csv') as test_transaction:
-                test_transaction = pd.read_csv(test_transaction, index_col='TransactionID')
+                test_transaction = pd.read_csv(test_transaction, index_col='TransactionID', nrows=n_rows)
             with z.open('test_identity.csv') as test_identity:
-                test_identity = pd.read_csv(test_identity, index_col='TransactionID')
+                test_identity = pd.read_csv(test_identity, index_col='TransactionID', nrows=n_rows)
     except (FileNotFoundError, zipfile.BadZipFile): # for Kaggle environment
         train_transaction = pd.read_csv(
-            '/kaggle/input/ieee-fraud-detection/train_transaction.csv', index_col='TransactionID')
+            '/kaggle/input/ieee-fraud-detection/train_transaction.csv', index_col='TransactionID', nrows=n_rows)
         train_identity = pd.read_csv(
-            '/kaggle/input/ieee-fraud-detection/train_identity.csv', index_col='TransactionID')
+            '/kaggle/input/ieee-fraud-detection/train_identity.csv', index_col='TransactionID', nrows=n_rows)
         test_transaction = pd.read_csv(
-            '/kaggle/input/ieee-fraud-detection/test_transaction.csv', index_col='TransactionID')
+            '/kaggle/input/ieee-fraud-detection/test_transaction.csv', index_col='TransactionID', nrows=n_rows)
         test_identity = pd.read_csv(
-            '/kaggle/input/ieee-fraud-detection/test_identity.csv', index_col='TransactionID')
+            '/kaggle/input/ieee-fraud-detection/test_identity.csv', index_col='TransactionID', nrows=n_rows)
     print("CSV files read in.")
 
     # Normalize column names (because it turns out the test dataframes use different naming conventions)
@@ -55,9 +58,25 @@ def process_features(df):
         'id_33', 'id_34', 'id_35', 'id_36', 'id_37', 'id_38'
     ]
 
+    # Add one-hot encoding of categorical features
     encoded_df = one_hot_encode_with_threshold(df, categorical_features, threshold=0.01)
-    processed_df = z_scale(encoded_df)
+
+    # Normalize all features
+    encoded_scaled_df = z_scale(encoded_df)
+
+    # Impute missing values
+    processed_df = impute_missing_values(encoded_scaled_df)
+
     return processed_df
+
+
+def impute_missing_values(df):
+    df_imputed = df.copy()
+    imputer = SimpleImputer(strategy='mean')
+    df_imputed[:] = imputer.fit_transform(df_imputed)
+
+    print("\nMissing value imputation completed. Imputed dataframe shape:", df_imputed.shape)
+    return df_imputed
 
 
 def one_hot_encode_with_threshold(df, categorical_features, threshold=0.01):
@@ -116,22 +135,86 @@ def split_data(df, test_size=0.2, random_state=42):
     return X_train, X_val, y_train, y_val
 
 
+def train_model(model, X_train, y_train):
+    model.fit(X_train, y_train)
+    return model
+
+
+def evaluate_model(model, X_train, X_val, y_train, y_val):
+    # Predict probabilities
+    train_probs = model.predict_proba(X_train)[:, 1]
+    val_probs = model.predict_proba(X_val)[:, 1]
+
+    # Calculate AUC
+    train_auc = roc_auc_score(y_train, train_probs)
+    val_auc = roc_auc_score(y_val, val_probs)
+
+    print(f"Model: {model.__class__.__name__}")
+    print(f"  Training AUC: {train_auc:.4f}")
+    print(f"  Validation AUC: {val_auc:.4f}")
+
+    return {"model": model, "train_auc": train_auc, "val_auc": val_auc}
+
+
+def train_and_evaluate_models(models, X_train, X_val, y_train, y_val):
+    results = []
+    best_model = None
+    best_val_auc = -1  # Initialize with a very low value
+
+    for model in models:
+        print(f"Training model: {model.__class__.__name__}")
+        trained_model = train_model(model, X_train, y_train)
+        result = evaluate_model(trained_model, X_train, X_val, y_train, y_val)
+        results.append({
+            "model_name": model.__class__.__name__,
+            "train_auc": result["train_auc"],
+            "val_auc": result["val_auc"]
+        })
+
+        # Update the best model based on validation AUC
+        if result["val_auc"] > best_val_auc:
+            best_val_auc = result["val_auc"]
+            best_model = trained_model
+
+    results_df = pd.DataFrame(results)
+    print("\nModel Evaluation Results:")
+    print(results_df)
+
+    print(f"\nBest Model: {best_model.__class__.__name__}")
+    print(f"  Validation AUC: {best_val_auc:.4f}")
+
+    return results_df, best_model
+
+
+def main_model_evaluation(X_train, X_val, y_train, y_val):
+    # Define models
+    models = [
+        LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42)
+    ]
+
+    # Train and evaluate models
+    results_df, best_model = train_and_evaluate_models(models, X_train, X_val, y_train, y_val)
+
+    return results_df, best_model
+
+
 def main():
     # Load data
-    train_df, test_df = load_data('data/ieee-fraud-detection.zip')
+    train_df, test_df = load_data('data/ieee-fraud-detection.zip', n_rows = None) # n_rows = 5000
 
     # Process features (one-hot encoding of categorical features, then z-scaling of all features)
     train_df = process_features(train_df)
-    #test_df = process_features(test_df)
+    test_df = process_features(test_df)
 
     # Prepare the training and validation sets
     X_train, X_val, y_train, y_val = split_data(train_df)
 
-    # TODO: Train and evaluate models
-    # Start with logistic regression, XGboost, k-nearest-neighbor
-    # Could use xgboost to select all features with importance > 1% & train neural network on those ones
+    # Train and evaluate models
+    results_df, best_model = main_model_evaluation(X_train, X_val, y_train, y_val)
+    print(results_df)
+    # TODO: Train XGBoost and neural network (latter maybe trained on features with >1% importance in XGBoost)
 
-    # TODO: Identify the best model based on AUC (Kaggle competition metric)
+    # TODO: Add functionality to plot ROC curve and confusion matrix
 
     # TODO: Make predictions for Kaggle competition for the test_df, based on best model
 
