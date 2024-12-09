@@ -13,6 +13,7 @@ from xgboost import XGBClassifier
 # TODO: Generate ipython notebook for submission to competition
 # TODO: Write ReadMe file for GitHub
 
+
 def load_data(zip_file_path, n_rows=None):
     try: # for local environment
         with zipfile.ZipFile(zip_file_path, 'r') as z:
@@ -48,7 +49,7 @@ def load_data(zip_file_path, n_rows=None):
     return train_df, test_df
 
 
-def process_features(df):
+def process_features(train_df, test_df):
     categorical_features = [
         'ProductCD',
         'card1', 'card2', 'card3', 'card4', 'card5', 'card6',
@@ -63,32 +64,37 @@ def process_features(df):
     ]
 
     # Add one-hot encoding of categorical features
-    encoded_df = one_hot_encode_with_threshold(df, categorical_features, threshold=0.01)
+    train_encoded, test_encoded = one_hot_encode_with_threshold(train_df, test_df, categorical_features, threshold=0.01)
 
     # Normalize all features
-    encoded_scaled_df = z_scale(encoded_df)
+    train_scaled, test_scaled = z_scale(train_encoded, test_encoded)
 
     # Impute missing values
-    processed_df = impute_missing_values(encoded_scaled_df)
+    train_processed, test_processed = impute_missing_values(train_scaled, test_scaled)
 
-    return processed_df
+    return train_processed, test_processed
 
 
-def impute_missing_values(df):
-    df_imputed = df.copy()
+
+def impute_missing_values(train_df, test_df):
     imputer = SimpleImputer(strategy='mean')
-    df_imputed[:] = imputer.fit_transform(df_imputed)
+    train_imputed = pd.DataFrame(imputer.fit_transform(train_df), columns=train_df.columns)
+    test_imputed = pd.DataFrame(imputer.transform(test_df), columns=test_df.columns)
 
-    print("\nMissing value imputation completed. Imputed dataframe shape:", df_imputed.shape)
-    return df_imputed
+    print("\nMissing value imputation completed.")
+    print("  Train dataframe shape:", train_imputed.shape)
+    print("  Test dataframe shape:", test_imputed.shape)
+
+    return train_imputed, test_imputed
 
 
-def one_hot_encode_with_threshold(df, categorical_features, threshold=0.01):
-    df_encoded = df.copy()
+def one_hot_encode_with_threshold(train_df, test_df, categorical_features, threshold=0.01):
+    train_encoded = train_df.copy()
+    test_encoded = test_df.copy()
 
     for feature in categorical_features:
-        # Calculate the frequency of each category
-        value_counts = df[feature].value_counts(normalize=True)
+        # Calculate the frequency of each category in the train set
+        value_counts = train_df[feature].value_counts(normalize=True)
 
         # Filter categories that meet the threshold
         valid_categories = value_counts[value_counts >= threshold].index.tolist()
@@ -97,29 +103,43 @@ def one_hot_encode_with_threshold(df, categorical_features, threshold=0.01):
         print(f"  Valid categories (above threshold): {valid_categories}")
         print(f"  Categories replaced with 'Other': {list(set(value_counts.index) - set(valid_categories))}")
 
-        # Replace categories below the threshold with 'Other'
-        df_encoded[feature] = df_encoded[feature].apply(lambda x: x if x in valid_categories else 'Other')
+        # Replace categories below the threshold with 'Other' in both train and test
+        train_encoded[feature] = train_encoded[feature].apply(lambda x: x if x in valid_categories else 'Other')
+        test_encoded[feature] = test_encoded[feature].apply(lambda x: x if x in valid_categories else 'Other')
 
         # Apply one-hot encoding
-        one_hot = pd.get_dummies(df_encoded[feature], prefix=feature)
-        df_encoded = pd.concat([df_encoded.drop(columns=[feature]), one_hot], axis=1)
+        train_one_hot = pd.get_dummies(train_encoded[feature], prefix=feature)
+        test_one_hot = pd.get_dummies(test_encoded[feature], prefix=feature)
 
-    print("\nOne-hot encoding completed. Encoded dataframe shape:", df_encoded.shape)
-    return df_encoded
+        # Align train and test one-hot encoded columns
+        train_encoded = pd.concat([train_encoded.drop(columns=[feature]), train_one_hot], axis=1)
+        test_encoded = pd.concat([test_encoded.drop(columns=[feature]), test_one_hot], axis=1)
+        test_encoded = test_encoded.reindex(columns=train_encoded.columns, fill_value=0)
+
+    print("\nOne-hot encoding completed.")
+    print("  Train dataframe shape:", train_encoded.shape)
+    print("  Test dataframe shape:", test_encoded.shape)
+
+    return train_encoded, test_encoded
 
 
-def z_scale(df, exclude_column='isFraud'):
-    df_scaled = df.copy()
+def z_scale(train_df, test_df, exclude_column='isFraud'):
+    train_scaled = train_df.copy()
+    test_scaled = test_df.copy()
 
     # Identify columns to scale
-    columns_to_scale = [col for col in df.columns if col != exclude_column]
+    columns_to_scale = [col for col in train_df.columns if col != exclude_column]
 
     # Apply StandardScaler to the selected columns
     scaler = StandardScaler()
-    df_scaled[columns_to_scale] = scaler.fit_transform(df_scaled[columns_to_scale])
+    train_scaled[columns_to_scale] = scaler.fit_transform(train_scaled[columns_to_scale])
+    test_scaled[columns_to_scale] = scaler.transform(test_scaled[columns_to_scale])
 
-    print("\nZ-scaling completed. Scaled dataframe shape:", df_scaled.shape)
-    return df_scaled
+    print("\nZ-scaling completed.")
+    print("  Train dataframe shape:", train_scaled.shape)
+    print("  Test dataframe shape:", test_scaled.shape)
+
+    return train_scaled, test_scaled
 
 
 def split_data(df, test_size=0.2, random_state=42):
@@ -194,7 +214,9 @@ def main_model_evaluation(X_train, X_val, y_train, y_val):
     # Define models
     models = [
         LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42),
-        XGBClassifier(n_estimators = 32, max_depth = 4)
+        XGBClassifier(n_estimators = 32, max_depth = 4),
+        XGBClassifier(n_estimators = 64, max_depth = 4),
+        XGBClassifier(n_estimators = 32, max_depth = 8), # best so far
     ]
 
     # Train and evaluate models
@@ -260,8 +282,8 @@ def main():
     # Load data
     train_df, test_df = load_data('data/ieee-fraud-detection.zip', n_rows = None) # n_rows = 5000
 
-    # Process features (one-hot encoding of categorical features, then z-scaling of all features)
-    train_df = process_features(train_df)
+    # Process features (one-hot encoding of categorical features, z-scaling of all features, imputation of missing values)
+    train_df, test_df = process_features(train_df, test_df)
 
     # Prepare the training and validation sets
     X_train, X_val, y_train, y_val = split_data(train_df)
@@ -269,6 +291,8 @@ def main():
     # Train and evaluate models
     results_df, best_model = main_model_evaluation(X_train, X_val, y_train, y_val)
     print(results_df)
+
+
     # TODO: Train XGBoost and neural network (latter maybe trained on features with >1% importance in XGBoost)
 
     # TODO: Add functionality to plot ROC curve and confusion matrix
