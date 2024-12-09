@@ -292,10 +292,11 @@ def main():
     results_df, best_model = main_model_evaluation(X_train, X_val, y_train, y_val)
     print(results_df)
 
+    # TODO: Add hyperparameters to the model evaluation results df to aid interpretation
 
-    # TODO: Train XGBoost and neural network (latter maybe trained on features with >1% importance in XGBoost)
+    # TODO: Plot feature importance in best model
 
-    # TODO: Add functionality to plot ROC curve and confusion matrix
+    # TODO: Train neural network (latter maybe trained on features with >1% importance in XGBoost)
 
     # TODO: Make predictions for Kaggle competition for the test_df, based on best model
 
