@@ -1,10 +1,14 @@
 import zipfile
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve, auc, confusion_matrix
 from sklearn.impute import SimpleImputer
+from xgboost import XGBClassifier
+
 
 # TODO: Generate ipython notebook for submission to competition
 # TODO: Write ReadMe file for GitHub
@@ -189,13 +193,67 @@ def train_and_evaluate_models(models, X_train, X_val, y_train, y_val):
 def main_model_evaluation(X_train, X_val, y_train, y_val):
     # Define models
     models = [
-        LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42)
+        LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42),
+        XGBClassifier(n_estimators = 32, max_depth = 4)
     ]
 
     # Train and evaluate models
     results_df, best_model = train_and_evaluate_models(models, X_train, X_val, y_train, y_val)
 
+    # Visualize results of best model
+    plot_and_save_roc_curve(best_model, X_val, y_val)
+    plot_and_save_confusion_matrix(best_model, X_val, y_val)
+
     return results_df, best_model
+
+
+def plot_and_save_roc_curve(model, X_val, y_val, output_path="roc_curve.png"):
+    # Predict probabilities
+    y_probs = model.predict_proba(X_val)[:, 1]
+
+    # Compute ROC curve and AUC
+    fpr, tpr, thresholds = roc_curve(y_val, y_probs)
+    roc_auc = auc(fpr, tpr)
+
+    # Plot the ROC curve
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color='blue', lw=2, label=f"ROC Curve (AUC = {roc_auc:.4f})")
+    plt.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--', label="Random Guess")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curve")
+    plt.legend(loc="lower right")
+    plt.grid(alpha=0.3)
+
+    # Save the plot as a PNG file
+    plt.savefig(output_path, dpi=300)
+    print(f"ROC curve saved to {output_path}")
+    plt.close()
+
+
+def plot_and_save_confusion_matrix(model, X_val, y_val, threshold=0.5, output_path="confusion_matrix.png"):
+    # Predict probabilities
+    y_probs = model.predict_proba(X_val)[:, 1]
+
+    # Convert probabilities to binary predictions based on threshold
+    y_pred = (y_probs >= threshold).astype(int)
+
+    # Compute confusion matrix and normalize to proportions
+    cm = confusion_matrix(y_val, y_pred)
+    cm_normalized = cm / cm.sum()  # Normalize by total predictions
+    cm_labels = ["Not Fraud (0)", "Fraud (1)"]
+
+    # Plot the confusion matrix
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm_normalized, annot=True, fmt=".2%", cmap="Blues", xticklabels=cm_labels, yticklabels=cm_labels)
+    plt.title(f"Confusion Matrix (Proportions, Threshold = {threshold})")
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+
+    # Save the plot as a PNG file
+    plt.savefig(output_path, dpi=300)
+    print(f"Confusion matrix plot saved to {output_path}")
+    plt.close()
 
 
 def main():
@@ -204,7 +262,6 @@ def main():
 
     # Process features (one-hot encoding of categorical features, then z-scaling of all features)
     train_df = process_features(train_df)
-    test_df = process_features(test_df)
 
     # Prepare the training and validation sets
     X_train, X_val, y_train, y_val = split_data(train_df)
