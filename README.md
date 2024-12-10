@@ -30,12 +30,10 @@ machine learning models:
 
 ### Evaluating model performance
 This program evaluates and compares the area under the ROC curve for models whose name and parameters 
-are manually specified in a dictionary passed into the `main_model_evaluation` function,and it selects the model 
+are manually specified in a list passed into the `main_model_evaluation` function, and it selects the model 
 with the best score to generate the final predictions for Kaggle.
-The best model so far was an XGBoostClassifier with parameters {'n_estimators': 32, 'max_depth': 8}. 
-The log loss on the validation set 
-within this program
-was **0.9353**.
+The best model so far was an XGBoostClassifier with parameters {'n_estimators': 32, 'max_depth': 8},
+whose area under the ROC curve for this program's validation set was **0.9353**.
 
 ## Visualizations
 
