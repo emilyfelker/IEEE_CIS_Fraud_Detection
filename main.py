@@ -11,7 +11,6 @@ from xgboost import XGBClassifier
 
 
 # TODO: Generate ipython notebook for submission to competition
-# TODO: Write ReadMe file for GitHub
 
 
 def load_data(zip_file_path, n_rows=None):
@@ -186,11 +185,16 @@ def train_and_evaluate_models(models, X_train, X_val, y_train, y_val):
     best_val_auc = -1  # Initialize with a very low value
 
     for model in models:
-        print(f"Training model: {model.__class__.__name__}")
+
+        explicit_hyperparameters = get_explicit_hyperparameters(model)
+
+        print(f"Training model: {model.__class__.__name__} with {explicit_hyperparameters}")
         trained_model = train_model(model, X_train, y_train)
         result = evaluate_model(trained_model, X_train, X_val, y_train, y_val)
+
         results.append({
-            "model_name": model.__class__.__name__,
+            "model_name": trained_model.__class__.__name__,
+            "hyperparameters": explicit_hyperparameters,
             "train_auc": result["train_auc"],
             "val_auc": result["val_auc"]
         })
@@ -202,15 +206,29 @@ def train_and_evaluate_models(models, X_train, X_val, y_train, y_val):
 
     results_df = pd.DataFrame(results)
     print("\nModel Evaluation Results:")
-    print(results_df)
+    print(results_df.to_string(index=False))
 
-    print(f"\nBest Model: {best_model.__class__.__name__}")
+    print(f"\nBest Model: {best_model.__class__.__name__} with {explicit_hyperparameters}")
     print(f"  Validation AUC: {best_val_auc:.4f}")
 
     return results_df, best_model
 
 
-def main_model_evaluation(X_train, X_val, y_train, y_val):
+
+def get_explicit_hyperparameters(model):
+    # Retrieve the default parameters for the model's class
+    default_params = type(model)().get_params()
+
+    # Compare with the current model's parameters
+    current_params = model.get_params()
+
+    # Keep only the parameters that differ from the defaults
+    explicit_params = {k: v for k, v in current_params.items() if v != default_params[k]}
+
+    return explicit_params
+
+
+def main_model_evaluation(X_train, X_val, y_train, y_val, feature_names):
     # Define models
     models = [
         LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42),
@@ -225,6 +243,7 @@ def main_model_evaluation(X_train, X_val, y_train, y_val):
     # Visualize results of best model
     plot_and_save_roc_curve(best_model, X_val, y_val)
     plot_and_save_confusion_matrix(best_model, X_val, y_val)
+    plot_and_save_feature_importance(best_model, feature_names)
 
     return results_df, best_model
 
@@ -278,6 +297,42 @@ def plot_and_save_confusion_matrix(model, X_val, y_val, threshold=0.5, output_pa
     plt.close()
 
 
+def plot_and_save_feature_importance(model, feature_names, output_path="feature_importance.png", top_n=20):
+    # Check for feature importance attribute
+    if hasattr(model, "feature_importances_"):
+        importances = model.feature_importances_
+        importance_type = "Feature Importance (Gini/Weight)"
+    elif hasattr(model, "coef_"):
+        importances = model.coef_[0] if len(model.coef_.shape) > 1 else model.coef_
+        importance_type = "Feature Importance (Coefficient)"
+    else:
+        print("Feature importance not available for this model.")
+        return
+
+    # Create a DataFrame for feature importances
+    importance_df = pd.DataFrame({
+        "Feature": feature_names,
+        "Importance": importances
+    }).sort_values(by="Importance", ascending=False)
+
+    # Keep only the top N features
+    top_features_df = importance_df.head(top_n)
+
+    # Plot feature importance
+    plt.figure(figsize=(10, 8))
+    plt.barh(top_features_df["Feature"], top_features_df["Importance"], color="skyblue")
+    plt.xlabel(importance_type)
+    plt.ylabel("Feature")
+    plt.title(f"Top {top_n} Features by Importance")
+    plt.gca().invert_yaxis()  # Invert y-axis for better visualization
+    plt.grid(alpha=0.3)
+
+    # Save the plot as a PNG file
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    print(f"Top {top_n} feature importance plot saved to {output_path}")
+    plt.close()
+
+
 def main():
     # Load data
     train_df, test_df = load_data('data/ieee-fraud-detection.zip', n_rows = None) # n_rows = 5000
@@ -288,15 +343,13 @@ def main():
     # Prepare the training and validation sets
     X_train, X_val, y_train, y_val = split_data(train_df)
 
+    # Pass feature names for plotting
+    feature_names = X_train.columns.tolist()
+
     # Train and evaluate models
-    results_df, best_model = main_model_evaluation(X_train, X_val, y_train, y_val)
-    print(results_df)
+    results_df, best_model = main_model_evaluation(X_train, X_val, y_train, y_val, feature_names)
 
-    # TODO: Add hyperparameters to the model evaluation results df to aid interpretation
-
-    # TODO: Plot feature importance in best model
-
-    # TODO: Train neural network (latter maybe trained on features with >1% importance in XGBoost)
+    # TODO: Train neural network (on features with >1% importance in XGBoost)
 
     # TODO: Make predictions for Kaggle competition for the test_df, based on best model
 
