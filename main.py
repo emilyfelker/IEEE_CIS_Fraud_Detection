@@ -2,12 +2,18 @@ import zipfile
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, roc_curve, auc, confusion_matrix
 from sklearn.impute import SimpleImputer
-from xgboost import XGBClassifier
+from xgboost import XGBClassifier, train
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras import Input
 
 
 # TODO: Generate ipython notebook for submission to competition
@@ -74,7 +80,6 @@ def process_features(train_df, test_df):
     return train_processed, test_processed
 
 
-
 def impute_missing_values(train_df, test_df):
     imputer = SimpleImputer(strategy='mean')
     train_imputed = pd.DataFrame(imputer.fit_transform(train_df), columns=train_df.columns)
@@ -83,7 +88,6 @@ def impute_missing_values(train_df, test_df):
     print("\nMissing value imputation completed.")
     print("  Train dataframe shape:", train_imputed.shape)
     print("  Test dataframe shape:", test_imputed.shape)
-
     return train_imputed, test_imputed
 
 
@@ -137,7 +141,6 @@ def z_scale(train_df, test_df, exclude_column='isFraud'):
     print("\nZ-scaling completed.")
     print("  Train dataframe shape:", train_scaled.shape)
     print("  Test dataframe shape:", test_scaled.shape)
-
     return train_scaled, test_scaled
 
 
@@ -154,7 +157,6 @@ def split_data(df, test_size=0.2, random_state=42):
     print(f"Data split completed:")
     print(f"  Training set: {X_train.shape[0]} samples")
     print(f"  Validation set: {X_val.shape[0]} samples")
-
     return X_train, X_val, y_train, y_val
 
 
@@ -175,44 +177,39 @@ def evaluate_model(model, X_train, X_val, y_train, y_val):
     print(f"Model: {model.__class__.__name__}")
     print(f"  Training AUC: {train_auc:.4f}")
     print(f"  Validation AUC: {val_auc:.4f}")
-
     return {"model": model, "train_auc": train_auc, "val_auc": val_auc}
 
 
 def train_and_evaluate_models(models, X_train, X_val, y_train, y_val):
-    results = []
-    best_model = None
-    best_val_auc = -1  # Initialize with a very low value
-
+    models_and_results = []
     for model in models:
-
         explicit_hyperparameters = get_explicit_hyperparameters(model)
-
         print(f"Training model: {model.__class__.__name__} with {explicit_hyperparameters}")
         trained_model = train_model(model, X_train, y_train)
         result = evaluate_model(trained_model, X_train, X_val, y_train, y_val)
-
-        results.append({
+        models_and_results.append({
+            "model": trained_model,
             "model_name": trained_model.__class__.__name__,
             "hyperparameters": explicit_hyperparameters,
             "train_auc": result["train_auc"],
             "val_auc": result["val_auc"]
         })
+    return models_and_results
 
-        # Update the best model based on validation AUC
-        if result["val_auc"] > best_val_auc:
-            best_val_auc = result["val_auc"]
-            best_model = trained_model
 
-    results_df = pd.DataFrame(results)
-    print("\nModel Evaluation Results:")
-    print(results_df.to_string(index=False))
+def reduce_features(df, feature_names):
+    # Ensure all specified features exist in the DataFrame
+    missing_features = [feature for feature in feature_names if feature not in df.columns]
+    if missing_features:
+        raise ValueError(f"The following features are missing in the DataFrame: {missing_features}")
 
-    print(f"\nBest Model: {best_model.__class__.__name__} with {explicit_hyperparameters}")
-    print(f"  Validation AUC: {best_val_auc:.4f}")
+    # Add "isFraud" to the feature list if it exists in the DataFrame
+    if "isFraud" in df.columns and "isFraud" not in feature_names:
+        feature_names = feature_names + ["isFraud"]
 
-    return results_df, best_model
-
+    # Select only the specified features
+    reduced_df = df[feature_names].copy()
+    return reduced_df
 
 
 def get_explicit_hyperparameters(model):
@@ -224,28 +221,36 @@ def get_explicit_hyperparameters(model):
 
     # Keep only the parameters that differ from the defaults
     explicit_params = {k: v for k, v in current_params.items() if v != default_params[k]}
-
     return explicit_params
+
+
+def choose_model(models_and_results):
+    if not models_and_results:
+        raise ValueError("The input list 'models_and_results' is empty.")
+
+    # Find the model with the highest validation AUC
+    best_model_entry = max(models_and_results, key=lambda x: x["val_auc"])
+    return best_model_entry["model"]
 
 
 def main_model_evaluation(X_train, X_val, y_train, y_val, feature_names):
     # Define models
     models = [
-        LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42),
-        XGBClassifier(n_estimators = 32, max_depth = 4),
-        XGBClassifier(n_estimators = 64, max_depth = 4),
+        #LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42),
+        #XGBClassifier(n_estimators = 32, max_depth = 4),
+        #XGBClassifier(n_estimators = 64, max_depth = 4),
         XGBClassifier(n_estimators = 32, max_depth = 8), # best so far
     ]
 
     # Train and evaluate models
-    results_df, best_model = train_and_evaluate_models(models, X_train, X_val, y_train, y_val)
+    models_and_results = train_and_evaluate_models(models, X_train, X_val, y_train, y_val)
+    best_model = choose_model(models_and_results)
 
     # Visualize results of best model
     plot_and_save_roc_curve(best_model, X_val, y_val)
     plot_and_save_confusion_matrix(best_model, X_val, y_val)
     plot_and_save_feature_importance(best_model, feature_names)
-
-    return results_df, best_model
+    return best_model
 
 
 def plot_and_save_roc_curve(model, X_val, y_val, output_path="roc_curve.png"):
@@ -333,6 +338,79 @@ def plot_and_save_feature_importance(model, feature_names, output_path="feature_
     plt.close()
 
 
+def build_neural_network(input_dim):
+    model = Sequential([
+        Input(shape=(input_dim,)),
+        Dense(128, activation='relu'),
+        Dropout(0.3),
+        Dense(64, activation='relu'),
+        Dropout(0.3),
+        Dense(32, activation='relu'),
+        Dense(1, activation='sigmoid')  # Output layer for binary classification
+    ])
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['AUC'])
+    return model
+
+
+def train_neural_network(X_train, y_train, X_val, y_val):
+    input_dim = X_train.shape[1]
+    model = build_neural_network(input_dim)
+
+    # Early stopping to prevent overfitting
+    early_stopping = EarlyStopping(monitor='val_AUC', patience=5, restore_best_weights=True, mode='max')
+
+    # Handling imbalanced data with weighted loss function
+    class_weights = {0: 1.0, 1: 10.0}
+    y_train = y_train.to_numpy() if isinstance(y_train, pd.Series) else y_train # doesn't work without this
+
+    # Train the model
+    history = model.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        batch_size=64,
+        epochs=50,
+        callbacks=[early_stopping],
+        verbose=1,
+        class_weight=class_weights
+    )
+
+    # Evaluate the model
+    val_probs = model.predict(X_val).flatten()
+    train_probs = model.predict(X_train).flatten()
+
+    train_auc = roc_auc_score(y_train, train_probs)
+    val_auc = roc_auc_score(y_val, val_probs)
+
+    print(f"Neural Network:")
+    print(f"  Training AUC: {train_auc:.4f}")
+    print(f"  Validation AUC: {val_auc:.4f}")
+    return model, train_auc, val_auc
+
+
+def get_top_features(model, feature_names, n=20):
+    # Check model type and extract feature importance
+    if hasattr(model, "coef_"):  # Logistic Regression
+        # Extract absolute values of coefficients for importance
+        importances = np.abs(model.coef_[0])
+    elif hasattr(model, "feature_importances_"):  # XGBoost
+        # Use feature_importances_ directly
+        importances = model.feature_importances_
+    else:
+        raise ValueError("Model type not supported. Provide a Logistic Regression or XGBoost model.")
+
+    # Pair feature names with their importances
+    feature_importance_df = pd.DataFrame({"Feature": feature_names, "Importance": importances})
+
+    # Sort by importance and get the top n features
+    top_features = (
+        feature_importance_df
+        .sort_values(by="Importance", ascending=False)
+        .head(n)["Feature"]
+        .tolist()
+    )
+    return top_features
+
+
 def main():
     # Load data
     train_df, test_df = load_data('data/ieee-fraud-detection.zip', n_rows = None) # n_rows = 5000
@@ -346,15 +424,21 @@ def main():
     # Pass feature names for plotting
     feature_names = X_train.columns.tolist()
 
-    # Train and evaluate models
-    results_df, best_model = main_model_evaluation(X_train, X_val, y_train, y_val, feature_names)
+    # Train and evaluate models (regression and random forest)
+    best_model = main_model_evaluation(X_train, X_val, y_train, y_val, feature_names)
 
-    # TODO: Train neural network (on features with >1% importance in XGBoost)
+    # Reduce features in order to then train neural network
+    top_features = get_top_features(best_model, feature_names, n=50)
+    print(top_features)
+    train_df_reduced = reduce_features(train_df, top_features)
+    test_df_reduced = reduce_features(test_df, top_features)
+    X_train_r, X_val_r, y_train_r, y_val_r = split_data(train_df_reduced)
+
+    # Train neural network on reduced dataset
+    nn_model, nn_train_auc, nn_val_auc = train_neural_network(X_train_r, y_train_r, X_val_r, y_val_r)
 
     # TODO: Make predictions for Kaggle competition for the test_df, based on best model
 
 
-
 if __name__ == '__main__':
     main()
-
