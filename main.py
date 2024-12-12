@@ -16,9 +16,6 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras import Input
 
 
-# TODO: Generate ipython notebook for submission to competition
-
-
 def load_data(zip_file_path, n_rows=None):
     try: # for local environment
         with zipfile.ZipFile(zip_file_path, 'r') as z:
@@ -338,23 +335,33 @@ def plot_and_save_feature_importance(model, feature_names, output_path="feature_
     plt.close()
 
 
-def build_neural_network(input_dim):
+def build_neural_network(input_dim, gelu_layer_sizes:list[int]=[64], last_layer:int=16):
+    gelu_layers = []
+    for n in gelu_layer_sizes:
+        gelu_layers.append(Dense(n, activation='gelu'))
+        gelu_layers.append(Dropout(0.5))
+
     model = Sequential([
         Input(shape=(input_dim,)),
-        Dense(128, activation='relu'),
-        Dropout(0.3),
-        Dense(64, activation='relu'),
-        Dropout(0.3),
-        Dense(32, activation='relu'),
+        *gelu_layers,
+        Dense(last_layer, activation='gelu'),
         Dense(1, activation='sigmoid')  # Output layer for binary classification
     ])
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['AUC'])
+
+    model.compile(optimizer=Adam(learning_rate=0.01), loss='binary_crossentropy', metrics=['AUC'])
     return model
 
 
-def train_neural_network(X_train, y_train, X_val, y_val):
+def train_neural_networks(X_train, X_val, y_train, y_val):
     input_dim = X_train.shape[1]
-    model = build_neural_network(input_dim)
+    models = [
+        build_neural_network(input_dim, gelu_layer_sizes=[32], last_layer=16),
+        build_neural_network(input_dim, gelu_layer_sizes=[64], last_layer=16),
+        build_neural_network(input_dim, gelu_layer_sizes=[128], last_layer=16),
+        build_neural_network(input_dim, gelu_layer_sizes=[64, 32], last_layer=16),
+        build_neural_network(input_dim, gelu_layer_sizes=[32, 16], last_layer=8),
+        build_neural_network(input_dim, gelu_layer_sizes=[16], last_layer=8),
+    ]
 
     # Early stopping to prevent overfitting
     early_stopping = EarlyStopping(monitor='val_AUC', patience=5, restore_best_weights=True, mode='max')
@@ -363,31 +370,35 @@ def train_neural_network(X_train, y_train, X_val, y_val):
     class_weights = {0: 1.0, 1: 10.0}
     y_train = y_train.to_numpy() if isinstance(y_train, pd.Series) else y_train # doesn't work without this
 
-    # Train the model
-    history = model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
-        batch_size=64,
-        epochs=50,
-        callbacks=[early_stopping],
-        verbose=1,
-        class_weight=class_weights
-    )
+    trained_models = []
+    for model in models:
+        # Train the model
+        history = model.fit(
+            X_train, y_train,
+            validation_data=(X_val, y_val),
+            batch_size=256,
+            epochs=50,
+            callbacks=[early_stopping],
+            verbose=1,
+            class_weight=class_weights
+        )
 
-    # Evaluate the model
-    val_probs = model.predict(X_val).flatten()
-    train_probs = model.predict(X_train).flatten()
+        # Evaluate the model
+        val_probs = model.predict(X_val).flatten()
+        train_probs = model.predict(X_train).flatten()
 
-    train_auc = roc_auc_score(y_train, train_probs)
-    val_auc = roc_auc_score(y_val, val_probs)
+        train_auc = roc_auc_score(y_train, train_probs)
+        val_auc = roc_auc_score(y_val, val_probs)
 
-    print(f"Neural Network:")
-    print(f"  Training AUC: {train_auc:.4f}")
-    print(f"  Validation AUC: {val_auc:.4f}")
-    return model, train_auc, val_auc
+        print(f"Neural Network:")
+        print(model.summary())
+        print(f"  Training AUC: {train_auc:.4f}")
+        print(f"  Validation AUC: {val_auc:.4f}")
+        trained_models.append((model, train_auc, val_auc))
+    return trained_models
 
 
-def get_top_features(model, feature_names, n=20):
+def get_top_features(model, feature_names, n=32):
     # Check model type and extract feature importance
     if hasattr(model, "coef_"):  # Logistic Regression
         # Extract absolute values of coefficients for importance
@@ -415,6 +426,9 @@ def main():
     # Load data
     train_df, test_df = load_data('data/ieee-fraud-detection.zip', n_rows = None) # n_rows = 5000
 
+    print(train_df["isFraud"].mean())
+    # assert False
+
     # Process features (one-hot encoding of categorical features, z-scaling of all features, imputation of missing values)
     train_df, test_df = process_features(train_df, test_df)
 
@@ -428,16 +442,14 @@ def main():
     best_model = main_model_evaluation(X_train, X_val, y_train, y_val, feature_names)
 
     # Reduce features in order to then train neural network
-    top_features = get_top_features(best_model, feature_names, n=50)
+    top_features = get_top_features(best_model, feature_names, n=512)
     print(top_features)
     train_df_reduced = reduce_features(train_df, top_features)
-    test_df_reduced = reduce_features(test_df, top_features)
+    # test_df_reduced = reduce_features(test_df, top_features)
     X_train_r, X_val_r, y_train_r, y_val_r = split_data(train_df_reduced)
 
     # Train neural network on reduced dataset
-    nn_model, nn_train_auc, nn_val_auc = train_neural_network(X_train_r, y_train_r, X_val_r, y_val_r)
-
-    # TODO: Make predictions for Kaggle competition for the test_df, based on best model
+    trained_nn_models = train_neural_networks(X_train_r, X_val_r, y_train_r, y_val_r)
 
 
 if __name__ == '__main__':
