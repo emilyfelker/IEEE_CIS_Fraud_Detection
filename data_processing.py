@@ -4,7 +4,6 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.impute import SimpleImputer
 
-# TODO: Remove Kaggle loading?
 
 def load_data(zip_file_path, n_rows=None):
     with zipfile.ZipFile(zip_file_path, 'r') as z:
@@ -13,10 +12,9 @@ def load_data(zip_file_path, n_rows=None):
         with z.open('train_identity.csv') as train_identity:
             train_identity = pd.read_csv(train_identity, index_col='TransactionID', nrows=n_rows)
     print("CSV files read in.")
-
-    # Merge transaction and identity columns
     df = train_transaction.merge(train_identity, how='left', left_index=True, right_index=True)
     print(f"Data loaded and merged. Shape: {df.shape}")
+
     return df
 
 
@@ -50,45 +48,9 @@ def impute_missing_values(df):
     imputer = SimpleImputer(strategy='mean')
     df_imputed = pd.DataFrame(imputer.fit_transform(df), columns=df.columns)
 
-    print("\nMissing value imputation completed.")
-    print("  Dataframe shape:", df_imputed.shape)
+    print(f"Missing value imputation completed. Dataframe shape: {df_imputed.shape}")
+
     return df_imputed
-
-
-def one_hot_encode_with_threshold_legacy(train_df, test_df, categorical_features, threshold=0.01):
-    train_encoded = train_df.copy()
-    test_encoded = test_df.copy()
-
-    for feature in categorical_features:
-        # Calculate the frequency of each category in the train set
-        value_counts = train_df[feature].value_counts(normalize=True)
-
-        # Filter categories that meet the threshold
-        valid_categories = value_counts[value_counts >= threshold].index.tolist()
-
-        print(f"Feature '{feature}':")
-        print(f"  Valid categories (above threshold): {valid_categories}")
-        print(f"  Categories replaced with 'Other': {list(set(value_counts.index) - set(valid_categories))}")
-
-        # Replace categories below the threshold with 'Other' in both train and test
-        train_encoded[feature] = train_encoded[feature].apply(lambda x: x if x in valid_categories else 'Other')
-        test_encoded[feature] = test_encoded[feature].apply(lambda x: x if x in valid_categories else 'Other')
-
-        # Apply one-hot encoding
-        train_one_hot = pd.get_dummies(train_encoded[feature], prefix=feature)
-        test_one_hot = pd.get_dummies(test_encoded[feature], prefix=feature)
-
-        # Align train and test one-hot encoded columns
-        train_encoded = pd.concat([train_encoded.drop(columns=[feature]), train_one_hot], axis=1)
-        test_encoded = pd.concat([test_encoded.drop(columns=[feature]), test_one_hot], axis=1)
-        test_encoded = test_encoded.reindex(columns=train_encoded.columns, fill_value=0)
-
-    print("\nOne-hot encoding completed.")
-    print("  Train dataframe shape:", train_encoded.shape)
-    print("  Test dataframe shape:", test_encoded.shape)
-
-    return train_encoded, test_encoded
-
 
 
 def one_hot_encode_with_threshold(df, categorical_features, threshold=0.01):
@@ -109,8 +71,7 @@ def one_hot_encode_with_threshold(df, categorical_features, threshold=0.01):
     # Drop original categorical features and append encoded features
     df_encoded = pd.concat([df.drop(columns=categorical_features), df_encoded], axis=1)
 
-    print("\nOne-hot encoding with threshold completed.")
-    print(f"  Dataframe shape: {df_encoded.shape}")
+    print(f"One-hot encoding with threshold completed. Dataframe shape: {df_encoded.shape}")
 
     return df_encoded
 
@@ -125,8 +86,8 @@ def z_scale(df, exclude_column='isFraud'):
     scaler = StandardScaler()
     df_scaled[columns_to_scale] = scaler.fit_transform(df_scaled[columns_to_scale])
 
-    print("\nZ-scaling completed.")
-    print("  Dataframe shape:", df_scaled.shape)
+    print(f"Z-scaling completed. Dataframe shape: {df_scaled.shape}")
+
     return df_scaled
 
 
@@ -141,8 +102,8 @@ def split_data(df, test_size=0.2, random_state=42):
     )
 
     print(f"Data split completed:")
-    print(f"  Training set: {X_train.shape[0]} samples")
-    print(f"  Validation set: {X_val.shape[0]} samples")
+    print(f"  Training set: {X_train.shape[0]} samples, {X_train.shape[1]} features")
+    print(f"  Validation set: {X_val.shape[0]} samples, {X_val.shape[1]} features")
     return X_train, X_val, y_train, y_val
 
 
