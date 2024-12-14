@@ -38,17 +38,17 @@ whose area under the ROC curve for this program's validation set was **0.9378**.
 
 ### Feature Importance Plot 
 
-![Feature Importance](feature_importance.png)
+![Feature Importance](output/feature_importance.png)
 This plot identifies the features that had the greatest influence on the best-performing model’s (XGBoost) predictions. 
 By focusing on these top features, the dataset can be simplified to potentially improve the performance of more complex
 models, such as neural networks, by reducing noise and computational requirements.
 
 ### ROC Curve
-![ROC Curve](roc_curve.png)
+![ROC Curve](output/roc_curve.png)
 Receiver Operating Characteristic (ROC) curve for the best model with an Area Under the Curve (AUC) of 0.9378.
 
 ### Confusion Matrix
-![Confusion Matrix](confusion_matrix.png)
+![Confusion Matrix](output/confusion_matrix.png)
 This plot displays how well the model fraudulent transactions by comparing the true vs. predicted classes.
 
 ## Next steps

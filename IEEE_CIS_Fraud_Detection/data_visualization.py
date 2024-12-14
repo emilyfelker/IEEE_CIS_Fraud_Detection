@@ -4,7 +4,7 @@ import seaborn as sns
 from sklearn.metrics import roc_curve, auc, confusion_matrix
 
 
-def plot_and_save_roc_curve(model, X_val, y_val, output_path="roc_curve.png"):
+def plot_and_save_roc_curve(model, X_val, y_val, output_path="output/roc_curve.png"):
     # Predict probabilities
     y_probs = model.predict_proba(X_val)[:, 1]
 
@@ -28,7 +28,7 @@ def plot_and_save_roc_curve(model, X_val, y_val, output_path="roc_curve.png"):
     plt.close()
 
 
-def plot_and_save_confusion_matrix(model, X_val, y_val, threshold=0.5, output_path="confusion_matrix.png"):
+def plot_and_save_confusion_matrix(model, X_val, y_val, threshold=0.5, output_path="output/confusion_matrix.png"):
     # Predict probabilities
     y_probs = model.predict_proba(X_val)[:, 1]
 
@@ -53,7 +53,7 @@ def plot_and_save_confusion_matrix(model, X_val, y_val, threshold=0.5, output_pa
     plt.close()
 
 
-def plot_and_save_feature_importance(model, feature_names, output_path="feature_importance.png", top_n=20):
+def plot_and_save_feature_importance(model, feature_names, output_path="output/feature_importance.png", top_n=20):
     # Check for feature importance attribute
     if hasattr(model, "feature_importances_"):
         importances = model.feature_importances_

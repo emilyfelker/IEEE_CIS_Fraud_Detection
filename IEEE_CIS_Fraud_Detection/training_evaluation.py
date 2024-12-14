@@ -1,11 +1,8 @@
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from xgboost import XGBClassifier
-
-def train_model(model, X_train, y_train):
-    model.fit(X_train, y_train)
-    return model
 
 
 def evaluate_model(model, X_train, X_val, y_train, y_val):
@@ -28,7 +25,7 @@ def train_and_evaluate_models(models, X_train, X_val, y_train, y_val):
     for model in models:
         explicit_hyperparameters = get_explicit_hyperparameters(model)
         print(f"Training model: {model.__class__.__name__} with {explicit_hyperparameters}")
-        trained_model = train_model(model, X_train, y_train)
+        trained_model = model.fit(X_train, y_train)
         result = evaluate_model(trained_model, X_train, X_val, y_train, y_val)
         models_and_results.append({
             "model": trained_model,
@@ -64,23 +61,12 @@ def choose_model(models_and_results):
 def classical_model_evaluation(X_train, X_val, y_train, y_val, feature_names):
     # Define models
     models = [
-        #LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42),
-        #XGBClassifier(n_estimators = 32, max_depth = 4),
-        #XGBClassifier(n_estimators = 64, max_depth = 4),
+        LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42),
+        XGBClassifier(n_estimators = 32, max_depth = 4),
+        XGBClassifier(n_estimators = 64, max_depth = 4),
         XGBClassifier(n_estimators = 32, max_depth = 8), # best so far
 
     ]
-
-    # model performances = []
-    # for n_features in [None, 512, 256, 128]:
-    #     feature_set = select features
-    #
-    #     for model in models:
-    #         evaluate model
-    #
-    #     model performances append()
-    #
-    # return model performances
 
     # Train and evaluate models
     models_and_results = train_and_evaluate_models(models, X_train, X_val, y_train, y_val)

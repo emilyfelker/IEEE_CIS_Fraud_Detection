@@ -1,7 +1,9 @@
-from data_processing import load_data, process_features, reduce_features, split_data
-from data_visualization import plot_and_save_confusion_matrix, plot_and_save_feature_importance, plot_and_save_roc_curve
+from IEEE_CIS_Fraud_Detection.data_processing import load_data, process_features, reduce_features, split_data
+from IEEE_CIS_Fraud_Detection.data_visualization import plot_and_save_confusion_matrix, plot_and_save_feature_importance, plot_and_save_roc_curve
 from training_evaluation import classical_model_evaluation, get_top_features
 from neural_networks import train_neural_networks
+
+# TODO: Add tests
 
 def main():
     # Load data
@@ -35,3 +37,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

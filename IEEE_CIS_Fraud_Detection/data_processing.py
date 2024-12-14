@@ -104,6 +104,7 @@ def split_data(df, test_size=0.2, random_state=42):
     print(f"Data split completed:")
     print(f"  Training set: {X_train.shape[0]} samples, {X_train.shape[1]} features")
     print(f"  Validation set: {X_val.shape[0]} samples, {X_val.shape[1]} features")
+
     return X_train, X_val, y_train, y_val
 
 
@@ -119,4 +120,5 @@ def reduce_features(df, feature_names):
 
     # Select only the specified features
     reduced_df = df[feature_names].copy()
+
     return reduced_df

@@ -21,6 +21,7 @@ def build_neural_network(input_dim, gelu_layer_sizes:list[int]=[64], last_layer:
     ])
 
     model.compile(optimizer=Adam(learning_rate=0.01), loss='binary_crossentropy', metrics=['AUC'])
+
     return model
 
 
@@ -67,4 +68,5 @@ def train_neural_networks(X_train, X_val, y_train, y_val):
         print(f"  Training AUC: {train_auc:.4f}")
         print(f"  Validation AUC: {val_auc:.4f}")
         trained_models.append((model, train_auc, val_auc))
+
     return trained_models
