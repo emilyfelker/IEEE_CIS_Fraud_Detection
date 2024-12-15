@@ -35,18 +35,23 @@ def process_features(df):
     # Add one-hot encoding of categorical features
     df_encoded = one_hot_encode_with_threshold(df, categorical_features, threshold=0.01)
 
-    # Normalize all features
-    df_scaled = z_scale(df_encoded)
-
     # Impute missing values
-    df_processed = impute_missing_values(df_scaled)
+    df_imputed = impute_missing_values(df_encoded)
 
-    return df_processed
+    # Normalize all features
+    df_scaled = z_scale(df_imputed)
+
+    return df_scaled
 
 
-def impute_missing_values(df):
+def impute_missing_values(df, exclude_column='isFraud'):
+    df_imputed = df.copy()
+
+    # Identify columns to impute
+    columns_to_impute = [col for col in df.columns if col != exclude_column]
+
     imputer = SimpleImputer(strategy='mean')
-    df_imputed = pd.DataFrame(imputer.fit_transform(df), columns=df.columns)
+    df_imputed[columns_to_impute] = imputer.fit_transform(df_imputed[columns_to_impute])
 
     print(f"Missing value imputation completed. Dataframe shape: {df_imputed.shape}")
 
