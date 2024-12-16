@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
-from sklearn.metrics import roc_auc_score
 from sklearn.base import ClassifierMixin
 from IEEE_CIS_Fraud_Detection.training_evaluation import (
     evaluate_model,
