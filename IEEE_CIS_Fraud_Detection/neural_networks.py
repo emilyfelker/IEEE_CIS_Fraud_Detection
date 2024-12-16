@@ -7,7 +7,7 @@ from tensorflow.keras import Input
 from sklearn.metrics import roc_auc_score
 
 
-def build_neural_network(input_dim, gelu_layer_sizes:list[int]=[64], last_layer:int=16):
+def build_neural_network(input_dim: int, gelu_layer_sizes: list[int] = [64], last_layer: int = 16) -> Sequential:
     gelu_layers = []
     for n in gelu_layer_sizes:
         gelu_layers.append(Dense(n, activation='gelu'))
@@ -25,7 +25,7 @@ def build_neural_network(input_dim, gelu_layer_sizes:list[int]=[64], last_layer:
     return model
 
 
-def train_neural_networks(X_train, X_val, y_train, y_val):
+def train_neural_networks(X_train, X_val, y_train, y_val) -> list[tuple[Sequential, float, float]]:
     input_dim = X_train.shape[1]
     models = [
         build_neural_network(input_dim, gelu_layer_sizes=[32], last_layer=16),
