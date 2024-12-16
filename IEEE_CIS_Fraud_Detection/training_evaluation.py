@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
+from sklearn.base import ClassifierMixin
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from xgboost import XGBClassifier
+from typing import Dict, List, Union
 
 
-def evaluate_model(model, X_train, X_val, y_train, y_val):
+def evaluate_model(model: ClassifierMixin, X_train, X_val, y_train, y_val) -> Dict[str, Union[ClassifierMixin, float]]:
     # Predict probabilities
     train_probs = model.predict_proba(X_train)[:, 1]
     val_probs = model.predict_proba(X_val)[:, 1]
@@ -20,7 +22,8 @@ def evaluate_model(model, X_train, X_val, y_train, y_val):
     return {"model": model, "train_auc": train_auc, "val_auc": val_auc}
 
 
-def train_and_evaluate_models(models, X_train, X_val, y_train, y_val):
+def train_and_evaluate_models(models: List[ClassifierMixin], X_train, X_val, y_train, y_val) \
+        -> List[Dict[str, Union[ClassifierMixin, str, Dict[str, Union[str, int]], float]]]:
     models_and_results = []
     for model in models:
         explicit_hyperparameters = get_explicit_hyperparameters(model)
@@ -37,7 +40,7 @@ def train_and_evaluate_models(models, X_train, X_val, y_train, y_val):
     return models_and_results
 
 
-def get_explicit_hyperparameters(model):
+def get_explicit_hyperparameters(model: ClassifierMixin) -> Dict[str, Union[str, int]]:
     # Retrieve the default parameters for the model's class
     default_params = type(model)().get_params()
 
@@ -49,7 +52,8 @@ def get_explicit_hyperparameters(model):
     return explicit_params
 
 
-def choose_model(models_and_results):
+def choose_model(models_and_results: List[Dict[str, Union[ClassifierMixin, str, Dict[str, Union[str, int]], float]]]) \
+        -> ClassifierMixin:
     if not models_and_results:
         raise ValueError("The input list 'models_and_results' is empty.")
 
@@ -58,7 +62,7 @@ def choose_model(models_and_results):
     return best_model_entry["model"]
 
 
-def classical_model_evaluation(X_train, X_val, y_train, y_val, feature_names):
+def classical_model_evaluation(X_train, X_val, y_train, y_val) -> ClassifierMixin:
     # Define models
     models = [
         LogisticRegression(max_iter=1000, solver='lbfgs', random_state=42),
@@ -75,7 +79,7 @@ def classical_model_evaluation(X_train, X_val, y_train, y_val, feature_names):
     return best_model
 
 
-def get_top_features(model, feature_names, n=32):
+def get_top_features(model: ClassifierMixin, feature_names: List[str], n: int = 32) -> List[str]:
     # Check model type and extract feature importance
     if hasattr(model, "coef_"):  # Logistic Regression
         # Extract absolute values of coefficients for importance
