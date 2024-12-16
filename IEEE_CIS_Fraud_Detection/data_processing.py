@@ -3,9 +3,10 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.impute import SimpleImputer
+from typing import Optional
 
 
-def load_data(zip_file_path, n_rows=None):
+def load_data(zip_file_path: str, n_rows: Optional[int] = None) -> pd.DataFrame:
     with zipfile.ZipFile(zip_file_path, 'r') as z:
         with z.open('train_transaction.csv') as train_transaction:
             train_transaction = pd.read_csv(train_transaction, index_col='TransactionID', nrows=n_rows)
@@ -18,7 +19,7 @@ def load_data(zip_file_path, n_rows=None):
     return df
 
 
-def process_features(df):
+def process_features(df: pd.DataFrame) -> pd.DataFrame:
     categorical_features = [
         'ProductCD',
         'card1', 'card2', 'card3', 'card4', 'card5', 'card6',
@@ -44,7 +45,7 @@ def process_features(df):
     return df_scaled
 
 
-def impute_missing_values(df, exclude_column='isFraud'):
+def impute_missing_values(df: pd.DataFrame, exclude_column: str = 'isFraud') -> pd.DataFrame:
     df_imputed = df.copy()
 
     # Identify columns to impute
@@ -58,7 +59,8 @@ def impute_missing_values(df, exclude_column='isFraud'):
     return df_imputed
 
 
-def one_hot_encode_with_threshold(df, categorical_features, threshold=0.01):
+def one_hot_encode_with_threshold(df: pd.DataFrame, categorical_features: list[str],
+                                  threshold: float = 0.01) -> pd.DataFrame:
     encoder = OneHotEncoder(
         min_frequency=threshold,
         handle_unknown="infrequent_if_exist",  # Combine rare categories into 'infrequent'
@@ -81,7 +83,7 @@ def one_hot_encode_with_threshold(df, categorical_features, threshold=0.01):
     return df_encoded
 
 
-def z_scale(df, exclude_column='isFraud'):
+def z_scale(df: pd.DataFrame, exclude_column='isFraud') -> pd.DataFrame:
     df_scaled = df.copy()
 
     # Identify columns to scale
@@ -96,7 +98,8 @@ def z_scale(df, exclude_column='isFraud'):
     return df_scaled
 
 
-def split_data(df, test_size=0.2, random_state=42):
+def split_data(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42) -> \
+        tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     # Separate features (X) and target (y)
     X = df.drop(columns=['isFraud'])
     y = df['isFraud']
@@ -113,7 +116,7 @@ def split_data(df, test_size=0.2, random_state=42):
     return X_train, X_val, y_train, y_val
 
 
-def reduce_features(df, feature_names):
+def reduce_features(df: pd.DataFrame, feature_names: list[str]) -> pd.DataFrame:
     # Ensure all specified features exist in the DataFrame
     missing_features = [feature for feature in feature_names if feature not in df.columns]
     if missing_features:
