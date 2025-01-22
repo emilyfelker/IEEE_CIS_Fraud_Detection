@@ -39,7 +39,7 @@ def process_features(df: pd.DataFrame) -> pd.DataFrame:
     # Impute missing values
     df_imputed = impute_missing_values(df_encoded)
 
-    # Normalize all features
+    # Standardize all features
     df_scaled = z_scale(df_imputed)
 
     return df_scaled
